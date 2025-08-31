@@ -28,8 +28,8 @@
       --border-color: #333333;
       --accent-color: #007aff;
       --accent-gradient: linear-gradient(45deg, #007aff, #5856d6);
-      --diff-ins-bg: rgba(22, 163, 74, 0.15);
-      --diff-del-bg: rgba(220, 38, 38, 0.15);
+      --diff-ins-bg: #10823a;
+      --diff-del-bg: #8d1515;
       --diff-ins-text: #238d66;
       --diff-del-text: #802121;
     }
@@ -82,7 +82,7 @@
       color: var(--text-primary);
     }
     #diff-output .d2h-code-line-prefix { color: var(--text-secondary); }
-    #diff-output .d2h-ins { background-color: #238d66; }
+    #diff-output .d2h-ins { background-color: var(--diff-ins-bg); }
     #diff-output .d2h-del { background-color: var(--diff-del-bg); }
     #diff-output .d2h-ins .d2h-code-line-prefix,
     #diff-output .d2h-ins .d2h-code-line-ctn { color: var(--diff-ins-text); }
