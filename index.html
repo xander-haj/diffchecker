@@ -5,506 +5,273 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Neo Code Diff Viewer — Enhanced</title>
+  <title>Neo's Code Diff Viewer</title>
 
-  <!-- Tailwind CSS via CDN (includes typography plugin) -->
+  <!-- Tailwind (typography plugin) -->
   <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
 
-  <!-- diff2html CSS (UI styles for rendered diff) -->
+  <!-- diff2html stylesheet (correct bundle path) -->
   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css"/>
 
-  <!-- Highlight.js theme (GitHub Dark) -->
+  <!-- Highlight.js theme (remove SRI to avoid blocking) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" referrerpolicy="no-referrer"/>
+
+  <!-- Lucide icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
     :root {
-      color-scheme: dark;
+      --bg-primary: #111010;
+      --bg-secondary: #1a1a1a;
+      --text-primary: #e0e0e0;
+      --text-secondary: #a0a0a0;
+      --border-color: #333333;
+      --accent-color: #007aff;
+      --accent-gradient: linear-gradient(45deg, #007aff, #5856d6);
+      --diff-ins-bg: rgba(22, 163, 74, 0.15);
+      --diff-del-bg: rgba(220, 38, 38, 0.15);
+      --diff-ins-text: #34d399;
+      --diff-del-text: #f87171;
     }
-    html, body { height: 100%; }
-    body { background: #0b1020; }
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
     .input-textarea {
-      min-height: 260px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size: 0.9rem;
-      line-height: 1.5;
-      tab-size: 2;
-      white-space: pre;
-      overflow: auto;
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      font-family: 'SF Mono', Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
-    .btn {
-      @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white transition;
+    .input-textarea:focus {
+      outline: none;
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.3);
     }
-    .btn-ghost {
-      @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition;
+    .compare-button {
+      background: var(--accent-gradient);
+      transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
-    .btn-primary {
-      @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold disabled:opacity-60 disabled:cursor-not-allowed;
+    .compare-button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.1);
     }
-    .kbd {
-      @apply px-1.5 py-0.5 rounded-md border border-white/10 bg-white/10 text-xs;
+    .compare-button:disabled {
+      background: var(--border-color);
+      cursor: not-allowed;
+      opacity: 0.6;
+      transform: none;
+      box-shadow: none;
     }
-    .panel {
-      @apply rounded-2xl border border-white/10 bg-white/5;
+    #diff-output .d2h-file-wrapper {
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      margin-bottom: 0;
     }
-    .field-label {
-      @apply text-sm text-gray-300;
+    #diff-output .d2h-file-header {
+      background-color: var(--bg-secondary);
+      padding: 10px 15px;
     }
-    .field-hint {
-      @apply text-xs text-gray-400;
+    #diff-output .d2h-code-line,
+    #diff-output .d2h-code-side-line {
+      background-color: var(--bg-secondary);
+      color: var(--text-primary);
     }
+    #diff-output .d2h-code-line-prefix { color: var(--text-secondary); }
+    #diff-output .d2h-ins { background-color: var(--diff-ins-bg); }
+    #diff-output .d2h-del { background-color: var(--diff-del-bg); }
+    #diff-output .d2h-ins .d2h-code-line-prefix,
+    #diff-output .d2h-ins .d2h-code-line-ctn { color: var(--diff-ins-text); }
+    #diff-output .d2h-del .d2h-code-line-prefix,
+    #diff-output .d2h-del .d2h-code-line-ctn { color: var(--diff-del-text); }
+    #diff-output .d2h-info {
+      background-color: var(--bg-secondary);
+      color: var(--text-secondary);
+    }
+    .d2h-file-list-wrapper { display: none; }
   </style>
 </head>
 <body>
-  <div class="container mx-auto p-4 md:p-8 min-h-full flex flex-col gap-6">
-    <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-      <div>
-        <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-white">Code Diff Viewer</h1>
-        <p class="text-gray-400 mt-1">Compare two code blocks. Export diffs. Tune settings. Keyboard shortcut <span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> to compare.</p>
-      </div>
-      <div class="flex items-center gap-2">
-        <button id="clear-both" class="btn-ghost" title="Clear both inputs">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M7 7l1-2h8l1 2M6 7h12l-1 12H7L6 7zM10 11v6M14 11v6"/></svg>
-          <span>Clear</span>
-        </button>
-        <button id="swap" class="btn-ghost" title="Swap Original and Modified">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h13M11 3l-4 4 4 4M16 17H3m4 4l4-4-4-4"/></svg>
-          <span>Swap</span>
-        </button>
-        <button id="save-snapshot" class="btn-ghost" title="Save current pair locally">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v16H4zM8 8h8v8H8z"/></svg>
-          <span>Save</span>
-        </button>
-        <button id="load-snapshot" class="btn-ghost" title="Load last saved pair">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          <span>Load</span>
-        </button>
-        <button id="download-patch" class="btn-ghost" title="Download .patch">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0l-3-3m3 3l3-3M4 21h16"/></svg>
-          <span>.patch</span>
-        </button>
-        <button id="download-html" class="btn-ghost" title="Download diff as HTML">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553 2.276A2 2 0 0121 14.09V19a2 2 0 01-2 2H5a2 2 0 01-2-2v-4.91a2 2 0 011.447-1.814L9 10"/></svg>
-          <span>HTML</span>
-        </button>
-      </div>
+  <div class="main-container container mx-auto p-4 md:p-8 min-h-screen flex flex-col">
+    <header class="text-center mb-8 md:mb-12">
+      <h1 class="text-4xl md:text-5xl font-bold text-white tracking-tight">Code Diff Viewer</h1>
+      <p class="text-lg text-gray-400 mt-2">Paste your code blocks and click compare to see the difference.</p>
     </header>
 
-    <section class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-      <div class="lg:col-span-2 panel p-4 md:p-5">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="flex flex-col">
-            <label for="code-old" class="field-label mb-2">Original</label>
-            <textarea id="code-old" class="input-textarea rounded-xl p-3 bg-black/30 text-gray-100 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Paste the original (before) code here"></textarea>
-            <div class="mt-2 flex items-center gap-3">
-              <label for="file-old" class="btn-ghost cursor-pointer">
-                <input id="file-old" type="file" class="hidden" />
-                <span>Load file</span>
-              </label>
-              <button id="copy-old" class="btn-ghost">Copy</button>
-            </div>
-          </div>
-          <div class="flex flex-col">
-            <label for="code-new" class="field-label mb-2">Modified</label>
-            <textarea id="code-new" class="input-textarea rounded-xl p-3 bg-black/30 text-gray-100 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Paste the modified (after) code here"></textarea>
-            <div class="mt-2 flex items-center gap-3">
-              <label for="file-new" class="btn-ghost cursor-pointer">
-                <input id="file-new" type="file" class="hidden" />
-                <span>Load file</span>
-              </label>
-              <button id="copy-new" class="btn-ghost">Copy</button>
-            </div>
-          </div>
+    <main class="flex-grow flex flex-col gap-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <div class="flex flex-col">
+          <label for="code-block-1" class="text-gray-400 mb-2 ml-1 block">Original Code</label>
+          <textarea id="code-block-1" class="input-textarea w-full h-64 md:h-80 p-4 rounded-lg text-sm shadow-inner" placeholder="Paste Code Block 1 here..."></textarea>
         </div>
-
-        <div class="mt-4 flex flex-wrap items-center gap-3">
-          <button id="compare" class="btn-primary">
-            <span>Compare</span>
-          </button>
-          <span class="text-sm text-gray-400">Press <span class="kbd">Ctrl</span> + <span class="kbd">Enter</span></span>
+        <div class="flex flex-col">
+          <label for="code-block-2" class="text-gray-400 mb-2 ml-1 block">Modified Code</label>
+          <textarea id="code-block-2" class="input-textarea w-full h-64 md:h-80 p-4 rounded-lg text-sm shadow-inner" placeholder="Paste Code Block 2 here..."></textarea>
         </div>
       </div>
 
-      <aside class="panel p-4 md:p-5">
-        <h2 class="text-lg font-semibold text-white mb-3">Settings</h2>
-
-        <div class="space-y-4">
-          <div>
-            <label for="file-name" class="field-label">File name (shown in patch)</label>
-            <input id="file-name" class="mt-1 w-full rounded-lg bg-black/30 border border-white/10 p-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" value="file"/>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label class="field-label">Output format</label>
-              <div class="mt-1 flex items-center gap-3">
-                <label class="inline-flex items-center gap-2"><input type="radio" name="format" value="side-by-side" checked/> <span class="text-sm">Side-by-side</span></label>
-                <label class="inline-flex items-center gap-2"><input type="radio" name="format" value="line-by-line"/> <span class="text-sm">Line-by-line</span></label>
-              </div>
-            </div>
-            <div>
-              <label class="field-label">Matching</label>
-              <div class="mt-1 flex items-center gap-3">
-                <label class="inline-flex items-center gap-2"><input type="radio" name="matching" value="lines" checked/> <span class="text-sm">Lines</span></label>
-                <label class="inline-flex items-center gap-2"><input type="radio" name="matching" value="words"/> <span class="text-sm">Words</span></label>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label for="context" class="field-label">Context lines</label>
-            <input id="context" type="range" min="0" max="20" step="1" value="5" class="w-full"/>
-            <div class="flex justify-between text-xs text-gray-400"><span>0</span><span id="context-value">5</span><span>20</span></div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label class="inline-flex items-center gap-2"><input id="opt-wrap" type="checkbox" checked/> <span class="text-sm">Wrap long lines</span></label>
-            <label class="inline-flex items-center gap-2"><input id="opt-ignore-ws" type="checkbox"/> <span class="text-sm">Ignore whitespace</span></label>
-            <label class="inline-flex items-center gap-2"><input id="opt-ignore-case" type="checkbox"/> <span class="text-sm">Ignore case</span></label>
-            <label class="inline-flex items-center gap-2"><input id="opt-normalize-json" type="checkbox"/> <span class="text-sm">Normalize JSON (sort keys)</span></label>
-            <label class="inline-flex items-center gap-2"><input id="opt-trim-eol" type="checkbox" checked/> <span class="text-sm">Normalize line endings</span></label>
-          </div>
-
-          <details class="mt-2 open:">
-            <summary class="cursor-pointer text-sm text-gray-300">Help</summary>
-            <div class="mt-2 prose prose-invert max-w-none">
-              <ul>
-                <li><strong>Normalize JSON</strong> parses both inputs; when valid JSON, it pretty-prints with sorted keys so diffs track real changes.</li>
-                <li><strong>Ignore whitespace</strong> reduces runs of spaces and tabs to single spaces before diffing.</li>
-                <li><strong>Keyboard</strong>: <span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> compare, <span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">S</span> download patch.</li>
-              </ul>
-            </div>
-          </details>
-        </div>
-      </aside>
-    </section>
-
-    <section class="panel p-4 md:p-5">
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-semibold text-white">Diff</h2>
-        <div id="stats" class="text-sm text-gray-300"></div>
+      <div class="flex justify-center my-4">
+        <button id="compare-btn" class="compare-button text-white font-bold py-3 px-8 rounded-full flex items-center justify-center gap-2 shadow-lg w-48 h-12">
+          <span id="btn-content" class="flex items-center gap-2"></span>
+        </button>
       </div>
-      <div id="diff-output" class="w-full min-h-[240px] rounded-xl border border-white/10 bg-black/20 overflow-auto"></div>
-    </section>
 
-    <footer class="text-center text-xs text-gray-500 py-4">
-      Built with diff2html, jsdiff, highlight.js, Tailwind.
-    </footer>
+      <div id="diff-output" class="w-full max-w-6xl mx-auto mt-4 min-h-[10rem] transition-opacity duration-300" aria-live="polite"></div>
+    </main>
   </div>
 
-  <!-- Dependencies (pinned versions; no SRI to avoid integrity mismatches in some hosts) -->
+  <!-- jsdiff (use cdnjs build that exposes the global `Diff`; no SRI) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jsdiff/8.0.2/diff.min.js" referrerpolicy="no-referrer"></script>
+
+  <!-- diff2html core + UI -->
   <script src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html-ui.min.js"></script>
+
+  <!-- Highlight.js core (no SRI) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" referrerpolicy="no-referrer"></script>
 
   <script>
-    // File: /index.html (inline script)
-    (function() {
-      const el = {
-        old: document.getElementById('code-old'),
-        neu: document.getElementById('code-new'),
-        fileOld: document.getElementById('file-old'),
-        fileNew: document.getElementById('file-new'),
-        copyOld: document.getElementById('copy-old'),
-        copyNew: document.getElementById('copy-new'),
-        clear: document.getElementById('clear-both'),
-        swap: document.getElementById('swap'),
-        save: document.getElementById('save-snapshot'),
-        load: document.getElementById('load-snapshot'),
-        compare: document.getElementById('compare'),
-        downloadPatch: document.getElementById('download-patch'),
-        downloadHTML: document.getElementById('download-html'),
-        out: document.getElementById('diff-output'),
-        stats: document.getElementById('stats'),
-        fileName: document.getElementById('file-name'),
-        context: document.getElementById('context'),
-        contextValue: document.getElementById('context-value'),
-        optWrap: document.getElementById('opt-wrap'),
-        optIgnoreWS: document.getElementById('opt-ignore-ws'),
-        optIgnoreCase: document.getElementById('opt-ignore-case'),
-        optNormalizeJSON: document.getElementById('opt-normalize-json'),
-        optTrimEOL: document.getElementById('opt-trim-eol'),
+    // Inline script for behavior: enhancements preserve original styling.
+    document.addEventListener('DOMContentLoaded', function () {
+      const elements = {
+        codeBlock1: document.getElementById('code-block-1'),
+        codeBlock2: document.getElementById('code-block-2'),
+        compareBtn: document.getElementById('compare-btn'),
+        btnContent: document.getElementById('btn-content'),
+        diffOutput: document.getElementById('diff-output'),
       };
 
-      const LS_KEYS = {
-        lastOld: 'diffviewer:lastOld',
-        lastNew: 'diffviewer:lastNew',
-        settings: 'diffviewer:settings'
+      // Button and message templates
+      const initialBtnHTML = '<i data-lucide="git-compare-arrows"></i><span>Compare</span>';
+      const loadingBtnHTML = '<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div><span>Processing...</span>';
+      const noDiffMessage = '<div class="text-center p-8 bg-gray-800 rounded-lg border border-gray-700"><p class="text-gray-400">No differences found. The two code blocks are identical.</p></div>';
+      const emptyFieldsMessage = '<div class="text-center p-8 bg-gray-800 rounded-lg border border-gray-700"><p class="text-gray-400">Paste code into both fields to see a comparison.</p></div>';
+      const initialMessage = '<div class="text-center p-8 bg-gray-800 rounded-lg border border-gray-700"><p class="text-gray-400">Click the &#39;Compare&#39; button to view the differences.</p></div>';
+
+      // LocalStorage keys
+      const LS1 = 'neo:diff:code1';
+      const LS2 = 'neo:diff:code2';
+
+      const state = {
+        isLoading: false,
+        setLoading(loading) {
+          this.isLoading = loading;
+          elements.compareBtn.disabled = loading;
+          elements.btnContent.innerHTML = loading ? loadingBtnHTML : initialBtnHTML;
+          if (!loading && window.lucide) {
+            lucide.createIcons();
+          }
+        }
       };
 
-      function normalizeEOL(text) {
-        return text.replace(/\r\n?/g, "\n");
-      }
+      const fail = (msg) => {
+        elements.diffOutput.innerHTML = '<div class="text-center p-8 bg-red-900/30 rounded-lg border border-red-700"><p class="text-red-300">' + msg + '</p></div>';
+        elements.diffOutput.style.opacity = '1';
+        state.setLoading(false);
+      };
 
-      function collapseWhitespace(text) {
-        return text
-          .replace(/[\t ]+/g, ' ')
-          .replace(/[ ]+\n/g, '\n')
-          .replace(/\n[ ]+/g, '\n');
-      }
+      const renderDiff = () => {
+        if (state.isLoading) return;
+        state.setLoading(true);
+        elements.diffOutput.style.opacity = '0.5';
 
-      function stableStringify(input) {
-        try {
-          const jsonA = JSON.parse(input);
-          const normalize = (obj) => {
-            if (Array.isArray(obj)) {
-              return obj.map(normalize);
-            } else if (obj && typeof obj === 'object') {
-              const keys = Object.keys(obj).sort();
-              const out = {};
-              for (const k of keys) out[k] = normalize(obj[k]);
-              return out;
-            }
-            return obj;
-          };
-          const normalized = normalize(jsonA);
-          return JSON.stringify(normalized, null, 2) + "\n";
-        } catch (e) {
-          return null;
-        }
-      }
-
-      function preprocess(text, opts) {
-        let t = text;
-        if (opts.trimEOL) t = normalizeEOL(t);
-        if (opts.ignoreWS) t = collapseWhitespace(t);
-        if (opts.ignoreCase) t = t.toLowerCase();
-        if (opts.normalizeJSON) {
-          const s = stableStringify(t);
-          if (s !== null) t = s;
-        }
-        return t;
-      }
-
-      function getSettings() {
-        const format = document.querySelector('input[name="format"]:checked').value;
-        const matching = document.querySelector('input[name="matching"]:checked').value;
-        const context = parseInt(el.context.value, 10);
-        return {
-          fileName: el.fileName.value || 'file',
-          format,
-          matching,
-          context,
-          wrap: el.optWrap.checked,
-          ignoreWS: el.optIgnoreWS.checked,
-          ignoreCase: el.optIgnoreCase.checked,
-          normalizeJSON: el.optNormalizeJSON.checked,
-          trimEOL: el.optTrimEOL.checked
-        };
-      }
-
-      function saveSettingsToLS() {
-        try {
-          localStorage.setItem(LS_KEYS.settings, JSON.stringify(getSettings()));
-        } catch (e) {}
-      }
-
-      function loadSettingsFromLS() {
-        try {
-          const raw = localStorage.getItem(LS_KEYS.settings);
-          if (!raw) return;
-          const s = JSON.parse(raw);
-          if (s.fileName) el.fileName.value = s.fileName;
-          if (s.context != null) { el.context.value = s.context; el.contextValue.textContent = String(s.context); }
-          if (s.wrap != null) el.optWrap.checked = !!s.wrap;
-          if (s.ignoreWS != null) el.optIgnoreWS.checked = !!s.ignoreWS;
-          if (s.ignoreCase != null) el.optIgnoreCase.checked = !!s.ignoreCase;
-          if (s.normalizeJSON != null) el.optNormalizeJSON.checked = !!s.normalizeJSON;
-          if (s.trimEOL != null) el.optTrimEOL.checked = !!s.trimEOL;
-          if (s.format) {
-            const r = document.querySelector(`input[name="format"][value="${s.format}"]`);
-            if (r) r.checked = true;
-          }
-          if (s.matching) {
-            const r2 = document.querySelector(`input[name="matching"][value="${s.matching}"]`);
-            if (r2) r2.checked = true;
-          }
-        } catch (e) {}
-      }
-
-      function computeStats(a, b) {
-        if (!window.Diff || typeof window.Diff.diffLines !== 'function') return '';
-        const opts = { ignoreWhitespace: el.optIgnoreWS.checked };
-        // Case insensitivity handled in preprocess.
-        const parts = window.Diff.diffLines(a, b, opts);
-        let added = 0, removed = 0, unchanged = 0;
-        for (const p of parts) {
-          const lines = p.value.split('\n').length - 1; // count line breaks
-          if (p.added) added += lines;
-          else if (p.removed) removed += lines;
-          else unchanged += lines;
-        }
-        return `${added} lines added, ${removed} lines removed`;
-      }
-
-      function renderDiff() {
-        const settings = getSettings();
-        saveSettingsToLS();
-
-        const oldRaw = el.old.value;
-        const newRaw = el.neu.value;
-
-        if (!oldRaw.trim() && !newRaw.trim()) {
-          el.out.innerHTML = "<div class=\"p-6 text-center text-gray-300\">Paste code in both inputs to compare.</div>";
-          el.stats.textContent = "";
-          return;
-        }
-
-        const oldCode = preprocess(oldRaw, settings);
-        const newCode = preprocess(newRaw, settings);
-
-        // Build patch
-        if (!window.Diff || typeof window.Diff.createPatch !== 'function') {
-          el.out.innerHTML = "<div class=\"p-6 text-red-300\">Error: jsdiff failed to load.</div>";
-          el.stats.textContent = "";
-          return;
-        }
-        const patch = window.Diff.createPatch(settings.fileName, oldCode, newCode, '', '', { context: settings.context });
-
-        // Render with diff2html
-        if (typeof window.Diff2HtmlUI === 'undefined') {
-          el.out.innerHTML = "<div class=\"p-6 text-red-300\">Error: diff2html UI failed to load.</div>";
-          el.stats.textContent = "";
-          return;
-        }
-
-        el.out.innerHTML = "";
-        const ui = new window.Diff2HtmlUI(el.out, patch, {
-          drawFileList: false,
-          matching: settings.matching,
-          outputFormat: settings.format,
-          renderNothingWhenEmpty: true,
-          wordWrap: settings.wrap
-        });
-        ui.draw();
-        if (typeof window.hljs !== 'undefined') {
-          ui.highlightCode();
-        }
-
-        // Stats
-        el.stats.textContent = computeStats(oldCode, newCode);
-
-        // Persist last inputs
-        try {
-          localStorage.setItem(LS_KEYS.lastOld, oldRaw);
-          localStorage.setItem(LS_KEYS.lastNew, newRaw);
-        } catch (e) {}
-      }
-
-      function readFileInto(elTarget, file) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          elTarget.value = String(reader.result || '');
-        };
-        reader.readAsText(file);
-      }
-
-      function download(filename, content, type) {
-        const blob = new Blob([content], { type });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
         setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }, 0);
-      }
+          const oldCode = elements.codeBlock1.value;
+          const newCode = elements.codeBlock2.value;
 
-      function exportPatch() {
-        const settings = getSettings();
-        const oldCode = preprocess(el.old.value, settings);
-        const newCode = preprocess(el.neu.value, settings);
-        const patch = window.Diff.createPatch(settings.fileName, oldCode, newCode, '', '', { context: settings.context });
-        download(settings.fileName + ".patch", patch, "text/plain");
-      }
+          if (!oldCode.trim() && !newCode.trim()) {
+            elements.diffOutput.innerHTML = emptyFieldsMessage;
+            elements.diffOutput.style.opacity = '1';
+            state.setLoading(false);
+            return;
+          }
 
-      function exportHTML() {
-        const settings = getSettings();
-        // Re-render once to ensure latest settings
-        renderDiff();
-        const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diff — ${settings.fileName}</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-<style>body{background:#0b1020;color:#e5e7eb;padding:1rem;font-family:ui-sans-serif,system-ui}</style>
-</head>
-<body>
-<div id="wrap" class="container">
-  ${el.out.innerHTML}
-</div>
-<script src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html-ui.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<script>if(window.hljs){document.querySelectorAll('pre code').forEach(c=>hljs.highlightElement(c));}</script>
-</body>
-</html>`;
-        download(settings.fileName + ".html", html, "text/html");
-      }
+          if (oldCode === newCode) {
+            elements.diffOutput.innerHTML = noDiffMessage;
+            elements.diffOutput.style.opacity = '1';
+            state.setLoading(false);
+            return;
+          }
 
-      function copyToClipboard(textarea) {
-        textarea.select();
-        document.execCommand('copy');
-      }
+          // Library load guardrails
+          if (typeof Diff === 'undefined') {
+            return fail('Error: "jsdiff" failed to load (global Diff is undefined). Check the CDN tag for jsdiff.');
+          }
+          if (typeof Diff2HtmlUI === 'undefined') {
+            return fail('Error: "diff2html-ui" failed to load. Check the CDN tag for diff2html UI bundle.');
+          }
 
-      // Event wiring
-      el.compare.addEventListener('click', renderDiff);
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault();
-          renderDiff();
+          // Build patch and render
+          const patch = Diff.createPatch('file', oldCode, newCode, '', '', { context: 5 });
+          const ui = new Diff2HtmlUI(elements.diffOutput, patch, {
+            drawFileList: false,
+            matching: 'lines',
+            outputFormat: 'side-by-side',
+            renderNothingWhenEmpty: true,
+            wordWrap: true
+          });
+
+          ui.draw();
+
+          if (typeof hljs !== 'undefined') {
+            ui.highlightCode();
+          }
+
+          elements.diffOutput.style.opacity = '1';
+          state.setLoading(false);
+        }, 30);
+      };
+
+      // --- Enhancements that do not touch styling ---
+
+      // Restore saved inputs (if any), else load simple examples
+      function restoreOrSeed() {
+        const a = localStorage.getItem(LS1);
+        const b = localStorage.getItem(LS2);
+        if (a !== null || b !== null) {
+          elements.codeBlock1.value = a || '';
+          elements.codeBlock2.value = b || '';
+          return;
         }
-        if (e.key.toLowerCase() === 's' && e.ctrlKey && e.shiftKey) {
-          e.preventDefault();
-          exportPatch();
-        }
-      });
+        elements.codeBlock1.value = [
+          'function helloWorld() {',
+          '  console.log("Hello, World!");',
+          '}',
+          '',
+          '// A simple function call',
+          'helloWorld();'
+        ].join('\\n');
 
-      el.fileOld.addEventListener('change', (e) => {
-        const f = e.target.files && e.target.files[0];
-        if (f) readFileInto(el.old, f);
-      });
-      el.fileNew.addEventListener('change', (e) => {
-        const f = e.target.files && e.target.files[0];
-        if (f) readFileInto(el.neu, f);
-      });
-
-      el.copyOld.addEventListener('click', () => copyToClipboard(el.old));
-      el.copyNew.addEventListener('click', () => copyToClipboard(el.neu));
-
-      el.clear.addEventListener('click', () => {
-        el.old.value = '';
-        el.neu.value = '';
-        el.out.innerHTML = '<div class="p-6 text-center text-gray-300">Cleared. Paste new code to compare.</div>';
-        el.stats.textContent = '';
-      });
-      el.swap.addEventListener('click', () => {
-        const temp = el.old.value;
-        el.old.value = el.neu.value;
-        el.neu.value = temp;
-      });
-      el.downloadPatch.addEventListener('click', exportPatch);
-      el.downloadHTML.addEventListener('click', exportHTML);
-
-      el.context.addEventListener('input', () => {
-        el.contextValue.textContent = String(el.context.value);
-      });
-
-      // Persist settings on change
-      for (const id of ['file-name','context','opt-wrap','opt-ignore-ws','opt-ignore-case','opt-normalize-json','opt-trim-eol']) {
-        const node = document.getElementById(id);
-        node.addEventListener('change', saveSettingsToLS);
-        node.addEventListener('input', saveSettingsToLS);
-      }
-      for (const name of ['format','matching']) {
-        document.querySelectorAll(`input[name="${name}"]`).forEach(r => r.addEventListener('change', saveSettingsToLS));
+        elements.codeBlock2.value = [
+          'function greet(name) {',
+          '  console.log(`Hello, ${name}!`);',
+          '}',
+          '',
+          '// A more personalized greeting',
+          "greet('Developer');"
+        ].join('\\n');
       }
 
-      // Drag & drop support
+      // Persist inputs as user types (debounced)
+      let t;
+      function persistInputs() {
+        clearTimeout(t);
+        t = setTimeout(() => {
+          try {
+            localStorage.setItem(LS1, elements.codeBlock1.value);
+            localStorage.setItem(LS2, elements.codeBlock2.value);
+          } catch (e) {}
+        }, 100);
+      }
+
+      elements.codeBlock1.addEventListener('input', persistInputs);
+      elements.codeBlock2.addEventListener('input', persistInputs);
+
+      // Drag & drop support for both textareas
       function installDrop(target) {
         target.addEventListener('dragover', (e) => { e.preventDefault(); target.classList.add('ring-2','ring-indigo-500'); });
         target.addEventListener('dragleave', () => { target.classList.remove('ring-2','ring-indigo-500'); });
@@ -512,64 +279,41 @@
           e.preventDefault();
           target.classList.remove('ring-2','ring-indigo-500');
           const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-          if (f) readFileInto(target, f);
-          else {
+          if (f) {
+            const reader = new FileReader();
+            reader.onload = () => { target.value = String(reader.result || ''); persistInputs(); };
+            reader.readAsText(f);
+          } else {
             const t = e.dataTransfer.getData('text/plain');
-            if (t) target.value = t;
+            if (t) { target.value = t; persistInputs(); }
           }
         });
       }
-      installDrop(el.old);
-      installDrop(el.neu);
+      installDrop(elements.codeBlock1);
+      installDrop(elements.codeBlock2);
 
-      // Snapshots
-      el.save.addEventListener('click', () => {
-        try {
-          localStorage.setItem(LS_KEYS.lastOld, el.old.value);
-          localStorage.setItem(LS_KEYS.lastNew, el.neu.value);
-        } catch (e) {}
-      });
-      el.load.addEventListener('click', () => {
-        try {
-          const a = localStorage.getItem(LS_KEYS.lastOld) || '';
-          const b = localStorage.getItem(LS_KEYS.lastNew) || '';
-          el.old.value = a;
-          el.neu.value = b;
-        } catch (e) {}
+      // Keyboard shortcut: Ctrl/Cmd + Enter to compare
+      document.addEventListener('keydown', (e) => {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 'Enter') {
+          e.preventDefault();
+          renderDiff();
+        }
       });
 
-      // Initialize
-      function setExamples() {
-        const exA = [
-          'function greet(name) {',
-          '  console.log("Hello, " + name + "!");',
-          '}',
-          '',
-          'greet("World");',
-          ''
-        ].join('\n');
+      // Init
+      const initialize = () => {
+        restoreOrSeed();
+        elements.compareBtn.addEventListener('click', renderDiff);
+        elements.btnContent.innerHTML = initialBtnHTML;
+        elements.diffOutput.innerHTML = initialMessage;
+        if (window.lucide) {
+          lucide.createIcons();
+        }
+      };
 
-        const exB = [
-          'function greet(name) {',
-          '  const msg = `Hello, ${name}!`;', // template string
-          '  console.log(msg);',
-          '}',
-          '',
-          'greet("Developer");',
-          ''
-        ].join('\n');
-
-        if (!el.old.value.trim()) el.old.value = exA;
-        if (!el.neu.value.trim()) el.neu.value = exB;
-      }
-
-      loadSettingsFromLS();
-      el.contextValue.textContent = String(el.context.value);
-      setExamples();
-
-      // Auto-compare on first paint
-      setTimeout(renderDiff, 0);
-    })();
+      initialize();
+    });
   </script>
 </body>
 </html>
