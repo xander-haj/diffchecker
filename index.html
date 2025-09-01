@@ -1,5 +1,5 @@
-<!-- index.html -->
-<!-- File: index.html -->
+<!-- /index.html -->
+<!-- File: /index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,7 +24,7 @@
       --bg-primary: #111010;
       --bg-secondary: #1a1a1a;
       --text-primary: #e0e0e0;
-      --text-secondary: #a0a0a0;
+      --text-secondary: #363535;
       --border-color: #333333;
       --accent-color: #007aff;
       --accent-gradient: linear-gradient(45deg, #007aff, #5856d6);
@@ -32,6 +32,9 @@
       --diff-del-bg: rgba(220, 38, 38, 0.15);
       --diff-ins-text: #34d399;
       --diff-del-text: #f87171;
+      --diff-lineno-text: #4d4a4a;       /* regular (context/unchanged) line numbers */
+      --diff-lineno-ins-text: #b2f1ca;   /* insertion line numbers */
+      --diff-lineno-del-text: #f4b7b7;   /* deletion line numbers */
     }
     body {
       background-color: var(--bg-primary);
@@ -82,8 +85,8 @@
       color: var(--text-primary);
     }
     #diff-output .d2h-code-line-prefix { color: var(--text-secondary); }
-    #diff-output .d2h-ins { background-color: var(--diff-ins-bg); }
-    #diff-output .d2h-del { background-color: var(--diff-del-bg); }
+    #diff-output .d2h-ins { background-color:  #2cab7c; }
+    #diff-output .d2h-del { background-color: #b42e2e; }
     #diff-output .d2h-ins .d2h-code-line-prefix,
     #diff-output .d2h-ins .d2h-code-line-ctn { color: var(--diff-ins-text); }
     #diff-output .d2h-del .d2h-code-line-prefix,
@@ -92,6 +95,58 @@
       background-color: var(--bg-secondary);
       color: var(--text-secondary);
     }
+
+    
+    /* Inline word-level highlight colors (HEX backgrounds, keep your text vars) */
+    #diff-output .d2h-code-line-ctn ins,
+    #diff-output .d2h-code-side-line ins,
+    #diff-output .d2h-code-line ins,
+    #diff-output ins {
+      background-color: #22C55E44 !important; /* green highlight bg (25% opacity) */
+      color: var(--diff-ins-text) !important;  /* keep your existing text var */
+      text-decoration: none !important;
+      border-radius: 3px;
+      padding: 0 1px;
+    }
+
+    #diff-output .d2h-code-line-ctn del,
+    #diff-output .d2h-code-side-line del,
+    #diff-output .d2h-code-line del,
+    #diff-output del {
+      background-color: #EF444444 !important; /* red highlight bg (25% opacity) */
+      color: var(--diff-del-text) !important;  /* keep your existing text var */
+      text-decoration: none !important;
+      border-radius: 3px;
+      padding: 0 1px;
+    }
+    
+    /* Line-number text colors (applies to both side-by-side and line-by-line modes) */
+    #diff-output .d2h-code-linenumber,
+    #diff-output .d2h-code-side-linenumber {
+      color: var(--diff-lineno-text) !important;
+    }
+
+    /* Added lines (green numbers) */
+    #diff-output .d2h-code-linenumber.d2h-ins,
+    #diff-output .d2h-code-side-linenumber.d2h-ins {
+      color: var(--diff-lineno-ins-text) !important;
+    }
+
+    /* Removed lines (red numbers) */
+    #diff-output .d2h-code-linenumber.d2h-del,
+    #diff-output .d2h-code-side-linenumber.d2h-del {
+      color: var(--diff-lineno-del-text) !important;
+    }
+
+    /* Ensure nested number spans inherit the color from the cell */
+    #diff-output .d2h-code-linenumber .line-num1,
+    #diff-output .d2h-code-linenumber .line-num2,
+    #diff-output .d2h-code-side-linenumber .line-num1,
+    #diff-output .d2h-code-side-linenumber .line-num2 {
+      color: inherit !important;
+    }
+
+
     .d2h-file-list-wrapper { display: none; }
   </style>
 </head>
@@ -99,7 +154,7 @@
   <div class="main-container container mx-auto p-4 md:p-8 min-h-screen flex flex-col">
     <header class="text-center mb-8 md:mb-12">
       <h1 class="text-4xl md:text-5xl font-bold text-white tracking-tight">Code Diff Viewer</h1>
-      <p class="text-lg text-gray-400 mt-2">Paste your code blocks and click compare to see the difference.</p>
+      <p class="text-lg text-gray-400 mt-2">Paste Your Code Blocks or Drag and Drop Your Entire Files <br> Then Click Compare To See the Difference.</p>
     </header>
 
     <main class="flex-grow flex flex-col gap-6">
@@ -135,6 +190,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" referrerpolicy="no-referrer"></script>
 
   <script>
+    // Inline script for behavior: enhancements preserve original styling.
     document.addEventListener('DOMContentLoaded', function () {
       const elements = {
         codeBlock1: document.getElementById('code-block-1'),
@@ -144,11 +200,16 @@
         diffOutput: document.getElementById('diff-output'),
       };
 
-      const initialBtnHTML = `<i data-lucide="git-compare-arrows"></i><span>Compare</span>`;
-      const loadingBtnHTML = `<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div><span>Processing...</span>`;
-      const noDiffMessage = `<div class="text-center p-8 bg-gray-800 rounded-lg border border-gray-700"><p class="text-gray-400">No differences found. The two code blocks are identical.</p></div>`;
-      const emptyFieldsMessage = `<div class="text-center p-8 bg-gray-800 rounded-lg border border-gray-700"><p class="text-gray-400">Paste code into both fields to see a comparison.</p></div>`;
-      const initialMessage = `<div class="text-center p-8 bg-gray-800 rounded-lg border border-gray-700"><p class="text-gray-400">Click the 'Compare' button to view the differences.</p></div>`;
+      // Button and message templates
+      const initialBtnHTML = '<i data-lucide="git-compare-arrows"></i><span>Compare</span>';
+      const loadingBtnHTML = '<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div><span>Processing...</span>';
+      const noDiffMessage = '<div class="text-center p-8 bg-gray-800 rounded-lg border border-gray-700"><p class="text-gray-400">No differences found. The two code blocks are identical.</p></div>';
+      const emptyFieldsMessage = '<div class="text-center p-8 bg-gray-800 rounded-lg border border-gray-700"><p class="text-gray-400">Paste code into both fields to see a comparison.</p></div>';
+      const initialMessage = '<div class="text-center p-8 bg-gray-800 rounded-lg border border-gray-700"><p class="text-gray-400">Click the &#39;Compare&#39; button to view the differences.</p></div>';
+
+      // LocalStorage keys
+      const LS1 = 'neo:diff:code1';
+      const LS2 = 'neo:diff:code2';
 
       const state = {
         isLoading: false,
@@ -156,14 +217,14 @@
           this.isLoading = loading;
           elements.compareBtn.disabled = loading;
           elements.btnContent.innerHTML = loading ? loadingBtnHTML : initialBtnHTML;
-          if (!loading) {
+          if (!loading && window.lucide) {
             lucide.createIcons();
           }
         }
       };
 
       const fail = (msg) => {
-        elements.diffOutput.innerHTML = `<div class="text-center p-8 bg-red-900/30 rounded-lg border border-red-700"><p class="text-red-300">${msg}</p></div>`;
+        elements.diffOutput.innerHTML = '<div class="text-center p-8 bg-red-900/30 rounded-lg border border-red-700"><p class="text-red-300">' + msg + '</p></div>';
         elements.diffOutput.style.opacity = '1';
         state.setLoading(false);
       };
@@ -191,7 +252,7 @@
             return;
           }
 
-          // Library load guardrails to prevent undefined errors
+          // Library load guardrails
           if (typeof Diff === 'undefined') {
             return fail('Error: "jsdiff" failed to load (global Diff is undefined). Check the CDN tag for jsdiff.');
           }
@@ -199,8 +260,8 @@
             return fail('Error: "diff2html-ui" failed to load. Check the CDN tag for diff2html UI bundle.');
           }
 
+          // Build patch and render
           const patch = Diff.createPatch('file', oldCode, newCode, '', '', { context: 5 });
-
           const ui = new Diff2HtmlUI(elements.diffOutput, patch, {
             drawFileList: false,
             matching: 'lines',
@@ -217,28 +278,93 @@
 
           elements.diffOutput.style.opacity = '1';
           state.setLoading(false);
-        }, 50);
+        }, 30);
       };
 
+      // --- Enhancements that do not touch styling ---
+
+      // Restore saved inputs (if any), else load simple examples
+      function restoreOrSeed() {
+        const a = localStorage.getItem(LS1);
+        const b = localStorage.getItem(LS2);
+        if (a !== null || b !== null) {
+          elements.codeBlock1.value = a || '';
+          elements.codeBlock2.value = b || '';
+          return;
+        }
+        elements.codeBlock1.value = [
+          'function helloWorld() {',
+          '  console.log("Hello, World!");',
+          '}',
+          '',
+          '// A simple function call',
+          'helloWorld();'
+        ].join('\\n');
+
+        elements.codeBlock2.value = [
+          'function greet(name) {',
+          '  console.log(`Hello, ${name}!`);',
+          '}',
+          '',
+          '// A more personalized greeting',
+          "greet('Developer');"
+        ].join('\\n');
+      }
+
+      // Persist inputs as user types (debounced)
+      let t;
+      function persistInputs() {
+        clearTimeout(t);
+        t = setTimeout(() => {
+          try {
+            localStorage.setItem(LS1, elements.codeBlock1.value);
+            localStorage.setItem(LS2, elements.codeBlock2.value);
+          } catch (e) {}
+        }, 100);
+      }
+
+      elements.codeBlock1.addEventListener('input', persistInputs);
+      elements.codeBlock2.addEventListener('input', persistInputs);
+
+      // Drag & drop support for both textareas
+      function installDrop(target) {
+        target.addEventListener('dragover', (e) => { e.preventDefault(); target.classList.add('ring-2','ring-indigo-500'); });
+        target.addEventListener('dragleave', () => { target.classList.remove('ring-2','ring-indigo-500'); });
+        target.addEventListener('drop', (e) => {
+          e.preventDefault();
+          target.classList.remove('ring-2','ring-indigo-500');
+          const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+          if (f) {
+            const reader = new FileReader();
+            reader.onload = () => { target.value = String(reader.result || ''); persistInputs(); };
+            reader.readAsText(f);
+          } else {
+            const t = e.dataTransfer.getData('text/plain');
+            if (t) { target.value = t; persistInputs(); }
+          }
+        });
+      }
+      installDrop(elements.codeBlock1);
+      installDrop(elements.codeBlock2);
+
+      // Keyboard shortcut: Ctrl/Cmd + Enter to compare
+      document.addEventListener('keydown', (e) => {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        if ((isMac ? e.metaKey : e.ctrlKey) && e.key === 'Enter') {
+          e.preventDefault();
+          renderDiff();
+        }
+      });
+
+      // Init
       const initialize = () => {
-        elements.codeBlock1.value = `function helloWorld() {
-  console.log("Hello, World!");
-}
-
-// A simple function call
-helloWorld();`;
-
-        elements.codeBlock2.value = `function greet(name) {
-  console.log(\`Hello, \${name}!\`);
-}
-
-// A more personalized greeting
-greet('Developer');`;
-
+        restoreOrSeed();
         elements.compareBtn.addEventListener('click', renderDiff);
         elements.btnContent.innerHTML = initialBtnHTML;
         elements.diffOutput.innerHTML = initialMessage;
-        lucide.createIcons();
+        if (window.lucide) {
+          lucide.createIcons();
+        }
       };
 
       initialize();
